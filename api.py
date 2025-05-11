@@ -12,7 +12,8 @@ import pymysql
 
 
 app = Flask(__name__)
-CORS(app) 
+from flask_cors import CORS
+CORS(app, resources={r"/*": {"origins": "*"}})
 conexion = pymysql.connect(
     host='www.server.daossystem.pro',
     user='usr_ia_lf_2025',
