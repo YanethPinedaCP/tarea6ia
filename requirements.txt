@@ -8,3 +8,4 @@ pymysql
 scipy
 matplotlib
 gunicorn
+tensorflow-cpu
