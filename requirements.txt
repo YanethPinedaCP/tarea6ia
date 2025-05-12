@@ -10,4 +10,6 @@ pymysql
 scipy
 matplotlib
 gunicorn
-
+h5py
+flask==2.0.1
+tensorflow==2.8.0
