@@ -9,3 +9,4 @@ pymysql
 python-dotenv
 matplotlib
 gunicorn
+logging
