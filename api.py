@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import base64
 from io import BytesIO
 from PIL import Image, ImageOps
@@ -9,7 +9,12 @@ from flask_cors import CORS
 import cv2
 import pymysql
 import os
+import logging
 from dotenv import load_dotenv
+
+# Configurar logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Cargar variables de entorno
 load_dotenv()
@@ -17,19 +22,30 @@ load_dotenv()
 app = Flask(__name__)
 
 # Configuración de CORS más permisiva
-CORS(app, resources={
-    r"/*": {
-        "origins": [
-            "https://yanethpinedacp.github.io",  # Tu dominio específico
-            "http://localhost:5000",  # Para desarrollo local
-            "*"  # Usar con precaución, solo para pruebas
-        ],
-        "methods": ["GET", "POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-# Configuración de base de datos desde variables de entorno
+# Endpoint raíz con información del servicio
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({
+        "status": "online",
+        "service": "IA Digit Recognition API",
+        "endpoints": [
+            "/predecir - Predict single digit",
+            "/predecirmas - Predict multiple digits",
+            "/modelo - Check model status"
+        ]
+    }), 200
+
+# Endpoint de prueba
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({
+        "status": "healthy",
+        "message": "API is running smoothly"
+    }), 200
+
+# Configuración de base de datos
 try:
     conexion = pymysql.connect(
         host=os.getenv('DB_HOST', 'www.server.daossystem.pro'),
@@ -38,36 +54,65 @@ try:
         db=os.getenv('DB_NAME', 'bd_ia_lf_2025'),
         port=int(os.getenv('DB_PORT', 3301))
     )
+    logger.info("Conexión a base de datos establecida exitosamente")
 except Exception as e:
-    print(f"Error de conexión a la base de datos: {e}")
+    logger.error(f"Error de conexión a la base de datos: {e}")
     conexion = None
 
 # Cargar modelo con manejo de errores
 try:
     modelo = tf.keras.models.load_model("modelo_mixto2.keras")
+    logger.info("Modelo cargado exitosamente")
 except Exception as e:
-    print(f"Error al cargar el modelo: {e}")
+    logger.error(f"Error al cargar el modelo: {e}")
     modelo = None
 
 # Manejador de preflight para CORS
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', 'https://yanethpinedacp.github.io')
+    response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     return response
 
-# Resto del código anterior... (mantén todas las funciones anteriores)
+# Funciones de procesamiento de imagen
+def centrar_imagen(imagen_np, size=(28, 28)):
+    """Centrar y normalizar imagen para predicción"""
+    try:
+        imagen_np = np.where(imagen_np < 0.2, 0, imagen_np)
+        coords = np.column_stack(np.where(imagen_np > 0.1))
+        
+        if coords.size == 0:
+            return np.zeros(size)
+        
+        y0, x0 = coords.min(axis=0)
+        y1, x1 = coords.max(axis=0)
+        recorte = imagen_np[y0:y1+1, x0:x1+1]
+        
+        imagen_recortada = Image.fromarray((recorte * 255).astype(np.uint8))
+        imagen_centrada = ImageOps.pad(imagen_recortada, size, color=0, centering=(0.5, 0.5))
+        
+        return np.array(imagen_centrada) / 255.0
+    except Exception as e:
+        logger.error(f"Error al centrar imagen: {e}")
+        return np.zeros(size)
 
+def base64_to_image(base64_str):
+    """Convertir imagen base64 a numpy array"""
+    try:
+        image_bytes = base64.b64decode(base64_str)
+        image = Image.open(BytesIO(image_bytes)).convert('L')
+        return np.array(image)
+    except Exception as e:
+        logger.error(f"Error al convertir imagen base64: {e}")
+        return None
+
+# Endpoint de predicción múltiple
 @app.route('/predecirmas', methods=['POST', 'OPTIONS'])
 def predecir_multiple():
     # Manejo de preflight request
     if request.method == 'OPTIONS':
-        response = jsonify(success=True)
-        response.headers.add('Access-Control-Allow-Origin', 'https://yanethpinedacp.github.io')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
-        response.headers.add('Access-Control-Allow-Methods', 'POST')
-        return response
+        return Response(status=200)
 
     if not modelo:
         return jsonify({'error': 'Modelo no disponible'}), 500
@@ -122,8 +167,25 @@ def predecir_multiple():
         return jsonify({'resultados': resultados})
 
     except Exception as e:
-        print(f"Error en /predecirmas: {e}")
+        logger.error(f"Error en /predecirmas: {e}")
         return jsonify({'error': str(e)}), 500
 
+# Manejador de errores 404
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({
+        "status": "error",
+        "message": "Endpoint not found",
+        "available_endpoints": [
+            "/",
+            "/health",
+            "/predecir",
+            "/predecirmas",
+            "/modelo"
+        ]
+    }), 404
+
+# Añade manejo de puerto para Render
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=True)
