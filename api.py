@@ -9,11 +9,12 @@ from flask_cors import CORS
 import matplotlib.pyplot as plt
 import cv2
 import pymysql
+from flask_cors import CORS
 
 
 app = Flask(__name__)
-from flask_cors import CORS
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app)
+
 conexion = pymysql.connect(
     host='www.server.daossystem.pro',
     user='usr_ia_lf_2025',
@@ -123,16 +124,13 @@ def predecir2():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/verificar_modelo', methods=['GET'])
+@app.route('/modelo', methods=['GET'])
 def verificar_modelo():
     try:
         modelo = tf.keras.models.load_model("modelo_mixto2.keras")
         return jsonify({"mensaje": "Modelo cargado correctamente"})
     except Exception as e:
         return jsonify({"error": str(e)})
-
-
-
 
 
 # =========================================
@@ -182,4 +180,4 @@ def predecir():
 # Ejecutar el servidor
 # =========================================
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True)
