@@ -123,6 +123,16 @@ def predecir2():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/verificar_modelo', methods=['GET'])
+def verificar_modelo():
+    try:
+        modelo = tf.keras.models.load_model("modelo_mixto2.keras")
+        return jsonify({"mensaje": "Modelo cargado correctamente"})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
+
 
 
 # =========================================
