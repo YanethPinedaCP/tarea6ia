@@ -1,13 +1,10 @@
 flask
 flask-cors
 tensorflow
-tensorflow-cpu
-keras           # Si estás usando keras directamente, aunque tensorflow ya lo incluye
 numpy
 pillow
-opencv-python
-pymysql
 scipy
+opencv-python-headless
+pymysql
+python-dotenv
 matplotlib
-gunicorn
-h5py
