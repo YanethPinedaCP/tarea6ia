@@ -66,20 +66,23 @@ def guardar():
 
 @app.route('/predecirmas', methods=['POST'])
 def predecir2():
-    data = request.get_json()
-    if 'imagen' not in data:
-        return jsonify({'error': 'Falta el campo imagen'}), 400
     try:
+        data = request.get_json()
+        if 'imagen' not in data:
+            return jsonify({'error': 'Falta el campo imagen'}), 400
+
         base64_str = data['imagen']
         if base64_str.startswith('data:image'):
             base64_str = base64_str.split(',')[1]
+        
         imagen_np = base64_to_image(base64_str)
 
-        # Invertir si fondo blanco
+        # 👇 Agrega logs para rastrear el proceso
+        print("Imagen recibida y decodificada.")
+
         if np.mean(imagen_np) > 127:
             imagen_np = 255 - imagen_np
 
-        # Binarizar y dilatar
         _, binaria = cv2.threshold(imagen_np, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         binaria = cv2.dilate(binaria, np.ones((2, 2), np.uint8), iterations=1)
 
@@ -94,10 +97,14 @@ def predecir2():
             if w * h < 50:
                 continue
 
-            recorte = imagen_np[y:y+h, x:x+w]
-            recorte = recorte / 255.0
+            recorte = imagen_np[y:y+h, x:x+w] / 255.0
             recorte = centrar_imagen(recorte)
             entrada = recorte.reshape(1, 28, 28, 1)
+
+            # 👇 Asegúrate de que el modelo está cargado
+            if modelo is None:
+                print("Modelo no cargado.")
+                return jsonify({'error': 'Modelo no disponible'}), 500
 
             pred = modelo.predict(entrada)
             digito = np.argmax(pred)
@@ -105,17 +112,16 @@ def predecir2():
 
             resultados.append({
                 'digito': int(digito),
-                'confianza': float(round(confianza, 2)),
+                'confianza': round(confianza, 2),
                 'coordenadas': {'x': int(x), 'y': int(y), 'w': int(w), 'h': int(h)}
             })
-
-        # Mostrar número final
-        print("Número reconocido:", ''.join(str(r['digito']) for r in resultados))
 
         return jsonify({'resultados': resultados})
 
     except Exception as e:
+        print("🔴 Error en /predecirmas:", str(e))
         return jsonify({'error': str(e)}), 500
+
 
 
 
